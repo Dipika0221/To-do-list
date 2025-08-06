@@ -1,67 +1,57 @@
 import streamlit as st
-from datetime import date
+from datetime import date, timedelta
 
-st.set_page_config(page_title="📆 Calendar To-Do List", layout="centered")
-st.title("🗓️ Calendar-based Daily To-Do List with Progress")
+st.set_page_config(page_title="🗓️ Repeating To-Do Tasks", layout="centered")
+st.title("🔁 Add Repeating Daily or Weekly Tasks")
 
 # Initialize task storage
 if "tasks" not in st.session_state:
     st.session_state.tasks = {}
 
-# --- Calendar Date Picker ---
-selected_date = st.date_input("📅 Select a date", date.today())
+# --- Task Input Section ---
+st.subheader("📝 Add a Recurring Task")
 
-# --- Add Multiple Tasks ---
-st.subheader("📝 Add Tasks for Selected Date")
-with st.form("task_form"):
-    tasks_input = st.text_area("Enter multiple tasks (one per line)")
-    add_tasks = st.form_submit_button("Add Tasks")
+task_text = st.text_input("Enter a task")
+start_date = st.date_input("Start Date", date.today())
 
-    if add_tasks and tasks_input.strip():
-        task_lines = [line.strip() for line in tasks_input.strip().split("\n") if line.strip()]
-        date_key = str(selected_date)
-        if date_key not in st.session_state.tasks:
-            st.session_state.tasks[date_key] = []
-        for line in task_lines:
-            st.session_state.tasks[date_key].append({"task": line, "done": False})
-        st.success(f"{len(task_lines)} task(s) added for {selected_date.strftime('%A, %d %B %Y')}")
+repeat_type = st.selectbox("Repeat Task", ["Only Once", "Daily for 7 Days", "Weekly (Same Weekday for 1 Month)"])
 
-# --- Show Tasks ---
-date_key = str(selected_date)
-st.subheader(f"📌 Tasks for {selected_date.strftime('%A, %d %B %Y')}")
+add_task = st.button("Add Task")
 
-if date_key in st.session_state.tasks and st.session_state.tasks[date_key]:
-    updated = []
-    done_count = 0
-    total_tasks = len(st.session_state.tasks[date_key])
+# --- Repeat Logic ---
+if add_task and task_text.strip():
+    dates_to_add = []
 
-    for i, task_data in enumerate(st.session_state.tasks[date_key]):
-        col1, col2 = st.columns([0.1, 0.9])
-        with col1:
-            done = st.checkbox("", value=task_data["done"], key=f"{date_key}_{i}")
-        with col2:
-            st.write(f"✅ ~~{task_data['task']}~~" if done else f"🔲 {task_data['task']}")
-        task_data["done"] = done
-        updated.append(task_data)
-        if done:
-            done_count += 1
+    if repeat_type == "Only Once":
+        dates_to_add = [start_date]
+    elif repeat_type == "Daily for 7 Days":
+        dates_to_add = [start_date + timedelta(days=i) for i in range(7)]
+    elif repeat_type == "Weekly (Same Weekday for 1 Month)":
+        weekday = start_date.weekday()
+        current_date = start_date
+        while current_date.month == start_date.month:
+            if current_date.weekday() == weekday:
+                dates_to_add.append(current_date)
+            current_date += timedelta(days=1)
 
-    st.session_state.tasks[date_key] = updated
+    # Add to session_state
+    for d in dates_to_add:
+        key = str(d)
+        if key not in st.session_state.tasks:
+            st.session_state.tasks[key] = []
+        st.session_state.tasks[key].append({"task": task_text.strip(), "done": False})
 
-    # --- Progress Bar ---
-    st.markdown("### 🟢 Progress")
-    st.progress(done_count / total_tasks)
-    st.write(f"✅ {done_count} of {total_tasks} task(s) completed")
+    st.success(f"✅ Task added on {len(dates_to_add)} date(s)!")
+
+# --- View All Tasks by Date ---
+st.markdown("---")
+st.subheader("📅 Tasks Added")
+
+if st.session_state.tasks:
+    for k in sorted(st.session_state.tasks.keys()):
+        task_list = st.session_state.tasks[k]
+        st.write(f"**{k}**:")
+        for task in task_list:
+            st.write(f"- {'✅' if task['done'] else '🔲'} {task['task']}")
 else:
-    st.info("No tasks added for this date.")
-
-# --- Summary of All Dates ---
-with st.expander("📖 View Task Summary (All Dates)"):
-    if st.session_state.tasks:
-        for k in sorted(st.session_state.tasks.keys()):
-            task_list = st.session_state.tasks[k]
-            pending = sum(not t["done"] for t in task_list)
-            completed = sum(t["done"] for t in task_list)
-            st.write(f"**{k}**: ✅ {completed} / 🔲 {pending + completed} tasks")
-    else:
-        st.write("No tasks added yet.")
+    st.info("No tasks added yet.")
